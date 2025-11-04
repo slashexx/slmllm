@@ -31,16 +31,22 @@ npm install
 
 ### Ollama (Required)
 
-Install Ollama from [ollama.ai](https://ollama.ai) and pull the required models:
+Install Ollama from [ollama.ai](https://ollama.ai) and pull the small model:
 ```bash
-ollama pull llama3
-ollama pull llama3.2
+ollama pull tinyllama
 ```
+
+TinyLlama is only ~637MB. The system will automatically fallback to Gemini if Ollama is unavailable.
 
 Make sure Ollama is running:
 ```bash
 ollama serve
 ```
+
+**Note:** For even smaller models, you can use quantized versions:
+- `tinyllama:1.1b` (~637MB) - current default
+- `phi` (~1.6GB) - slightly larger but better quality
+- `gemma:2b` (~1.4GB) - good balance
 
 ### Gemini (Optional - Fallback/Alternative)
 

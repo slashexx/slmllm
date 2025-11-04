@@ -2,7 +2,6 @@ import re
 import yaml
 from typing import Dict, List, Optional
 from dataclasses import dataclass
-import numpy as np
 
 
 @dataclass

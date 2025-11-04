@@ -57,7 +57,12 @@ async def query(request: QueryRequest):
             fallback_reason=result.get("fallback_reason")
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_detail = str(e)
+        traceback_str = traceback.format_exc()
+        print(f"Error processing query: {error_detail}")
+        print(f"Traceback: {traceback_str}")
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @app.get("/health")

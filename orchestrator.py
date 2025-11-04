@@ -13,13 +13,18 @@ class HybridOrchestrator:
         self.llm = LLMProvider(self.config['models']['llm'])
         self.slm = SLMProvider(self.config['models']['slm'])
         self.fallback_enabled = self.config['routing']['fallback_enabled']
+        
+        if 'gemini' in self.config['models']:
+            self.gemini_fallback = LLMProvider(self.config['models']['gemini'])
+        else:
+            self.gemini_fallback = None
     
     def process(self, prompt: str, priority: str = "balanced", use_llm_fallback: bool = True) -> Dict[str, Any]:
         decision = self.router.route(prompt, priority)
         
         try:
             if decision.model_type == "llm":
-                response = self.llm.generate(prompt)
+                response = self._try_generate_with_fallback(self.llm, prompt, "LLM")
                 return {
                     "response": response,
                     "model_used": "llm",
@@ -27,12 +32,12 @@ class HybridOrchestrator:
                     "fallback_used": False
                 }
             else:
-                response = self.slm.generate(prompt)
+                response = self._try_generate_with_fallback(self.slm, prompt, "SLM")
                 
                 if use_llm_fallback and self.fallback_enabled:
                     quality_check = self._check_response_quality(response, prompt)
                     if not quality_check:
-                        response = self.llm.generate(prompt)
+                        response = self._try_generate_with_fallback(self.llm, prompt, "LLM")
                         return {
                             "response": response,
                             "model_used": "llm",
@@ -51,7 +56,7 @@ class HybridOrchestrator:
         except Exception as e:
             if decision.model_type == "slm" and use_llm_fallback and self.fallback_enabled:
                 try:
-                    response = self.llm.generate(prompt)
+                    response = self._try_generate_with_fallback(self.llm, prompt, "LLM")
                     return {
                         "response": response,
                         "model_used": "llm",
@@ -63,6 +68,18 @@ class HybridOrchestrator:
                     raise Exception(f"Both models failed. SLM: {str(e)}, LLM: {str(llm_error)}")
             else:
                 raise e
+    
+    def _try_generate_with_fallback(self, provider, prompt: str, model_name: str) -> str:
+        try:
+            return provider.generate(prompt)
+        except Exception as e:
+            error_str = str(e).lower()
+            if ("ollama" in error_str and "connection" in error_str) or ("connection error" in error_str):
+                if self.gemini_fallback:
+                    return self.gemini_fallback.generate(prompt)
+                else:
+                    raise Exception(f"{model_name} failed (Ollama not available) and Gemini fallback not configured")
+            raise e
     
     def _check_response_quality(self, response: str, prompt: str) -> bool:
         if not response or len(response) < 10:

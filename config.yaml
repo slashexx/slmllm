@@ -1,14 +1,14 @@
 models:
   llm:
     provider: "ollama"
-    model: "llama3"
+    model: "tinyllama"
     endpoint: "http://localhost:11434/api/chat"
     max_tokens: 4096
     cost_per_token: 0.0
   
   slm:
     provider: "ollama"
-    model: "llama3.2"
+    model: "tinyllama"
     endpoint: "http://localhost:11434/api/chat"
     max_tokens: 2048
     cost_per_token: 0.0

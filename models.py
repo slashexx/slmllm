@@ -43,9 +43,24 @@ class LLMProvider:
                 )
                 response.raise_for_status()
                 result = response.json()
-                if 'message' in result and 'content' in result['message']:
-                    return result['message']['content']
-                return result.get('message', {}).get('content', '')
+                
+                if 'message' in result:
+                    if isinstance(result['message'], dict) and 'content' in result['message']:
+                        return result['message']['content']
+                    elif isinstance(result['message'], str):
+                        return result['message']
+                
+                if 'content' in result:
+                    return result['content']
+                
+                if 'response' in result:
+                    return result['response']
+                
+                raise Exception(f"Unexpected Ollama response format: {result}")
+            except requests.exceptions.ConnectionError as e:
+                raise Exception(f"Ollama connection error: Cannot connect to {self.endpoint}. Make sure Ollama is running (ollama serve)")
+            except requests.exceptions.Timeout as e:
+                raise Exception(f"Ollama timeout: Request took too long. The model might be loading or the request is too complex.")
             except Exception as e:
                 raise Exception(f"Ollama API error: {str(e)}")
         
@@ -98,9 +113,24 @@ class SLMProvider:
                 )
                 response.raise_for_status()
                 result = response.json()
-                if 'message' in result and 'content' in result['message']:
-                    return result['message']['content']
-                return result.get('message', {}).get('content', '')
+                
+                if 'message' in result:
+                    if isinstance(result['message'], dict) and 'content' in result['message']:
+                        return result['message']['content']
+                    elif isinstance(result['message'], str):
+                        return result['message']
+                
+                if 'content' in result:
+                    return result['content']
+                
+                if 'response' in result:
+                    return result['response']
+                
+                raise Exception(f"Unexpected Ollama response format: {result}")
+            except requests.exceptions.ConnectionError as e:
+                raise Exception(f"Ollama connection error: Cannot connect to {self.endpoint}. Make sure Ollama is running (ollama serve)")
+            except requests.exceptions.Timeout as e:
+                raise Exception(f"Ollama timeout: Request took too long. The model might be loading or the request is too complex.")
             except Exception as e:
                 raise Exception(f"Ollama API error: {str(e)}")
         
