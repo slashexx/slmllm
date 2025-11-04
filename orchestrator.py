@@ -23,7 +23,17 @@ class HybridOrchestrator:
         decision = self.router.route(prompt, priority)
         
         try:
-            if decision.model_type == "llm":
+            if decision.model_type == "gemini":
+                if not self.gemini_fallback:
+                    raise Exception("Gemini routing requested but Gemini not configured")
+                response = self.gemini_fallback.generate(prompt)
+                return {
+                    "response": response,
+                    "model_used": "gemini",
+                    "decision": decision,
+                    "fallback_used": False
+                }
+            elif decision.model_type == "llm":
                 response = self._try_generate_with_fallback(self.llm, prompt, "LLM")
                 return {
                     "response": response,
@@ -37,6 +47,15 @@ class HybridOrchestrator:
                 if use_llm_fallback and self.fallback_enabled:
                     quality_check = self._check_response_quality(response, prompt)
                     if not quality_check:
+                        if self.gemini_fallback:
+                            response = self.gemini_fallback.generate(prompt)
+                            return {
+                                "response": response,
+                                "model_used": "gemini",
+                                "decision": decision,
+                                "fallback_used": True,
+                                "fallback_reason": "SLM response quality insufficient, using Gemini"
+                            }
                         response = self._try_generate_with_fallback(self.llm, prompt, "LLM")
                         return {
                             "response": response,
@@ -56,6 +75,15 @@ class HybridOrchestrator:
         except Exception as e:
             if decision.model_type == "slm" and use_llm_fallback and self.fallback_enabled:
                 try:
+                    if self.gemini_fallback:
+                        response = self.gemini_fallback.generate(prompt)
+                        return {
+                            "response": response,
+                            "model_used": "gemini",
+                            "decision": decision,
+                            "fallback_used": True,
+                            "fallback_reason": f"SLM error: {str(e)}, using Gemini"
+                        }
                     response = self._try_generate_with_fallback(self.llm, prompt, "LLM")
                     return {
                         "response": response,
@@ -65,7 +93,19 @@ class HybridOrchestrator:
                         "fallback_reason": f"SLM error: {str(e)}"
                     }
                 except Exception as llm_error:
-                    raise Exception(f"Both models failed. SLM: {str(e)}, LLM: {str(llm_error)}")
+                    raise Exception(f"All models failed. SLM: {str(e)}, LLM/Gemini: {str(llm_error)}")
+            elif decision.model_type == "llm" and self.gemini_fallback:
+                try:
+                    response = self.gemini_fallback.generate(prompt)
+                    return {
+                        "response": response,
+                        "model_used": "gemini",
+                        "decision": decision,
+                        "fallback_used": True,
+                        "fallback_reason": f"LLM error: {str(e)}, using Gemini"
+                    }
+                except Exception as gemini_error:
+                    raise Exception(f"Both LLM and Gemini failed. LLM: {str(e)}, Gemini: {str(gemini_error)}")
             else:
                 raise e
     
@@ -80,6 +120,57 @@ class HybridOrchestrator:
                 else:
                     raise Exception(f"{model_name} failed (Ollama not available) and Gemini fallback not configured")
             raise e
+    
+    def distill_and_process(self, prompt: str) -> Dict[str, Any]:
+        distillation_prompt = f"""You are a prompt optimizer. Your task is to refine and narrow down the following user prompt to make it more focused, clear, and effective for a large language model.
+
+Original prompt: {prompt}
+
+Provide a refined, concise version of this prompt that:
+1. Maintains the core intent
+2. Removes unnecessary details
+3. Clarifies any ambiguities
+4. Focuses on the key question or request
+
+Return only the refined prompt, nothing else."""
+        
+        try:
+            refined_prompt = self._try_generate_with_fallback(self.slm, distillation_prompt, "SLM")
+            
+            if not refined_prompt or len(refined_prompt.strip()) < 10:
+                refined_prompt = prompt
+            
+            refined_prompt = refined_prompt.strip()
+            
+            if self.gemini_fallback:
+                final_response = self.gemini_fallback.generate(refined_prompt)
+                model_used = "gemini"
+            else:
+                final_response = self._try_generate_with_fallback(self.llm, refined_prompt, "LLM")
+                model_used = "llm"
+            
+            return {
+                "response": final_response,
+                "model_used": model_used,
+                "refined_prompt": refined_prompt,
+                "original_prompt": prompt,
+                "distillation_used": True
+            }
+        except Exception as e:
+            if self.gemini_fallback:
+                try:
+                    final_response = self.gemini_fallback.generate(prompt)
+                    return {
+                        "response": final_response,
+                        "model_used": "gemini",
+                        "refined_prompt": prompt,
+                        "original_prompt": prompt,
+                        "distillation_used": False,
+                        "distillation_error": str(e)
+                    }
+                except Exception as gemini_error:
+                    raise Exception(f"Distillation and fallback failed. Distillation: {str(e)}, Gemini: {str(gemini_error)}")
+            raise Exception(f"Distillation failed: {str(e)}")
     
     def _check_response_quality(self, response: str, prompt: str) -> bool:
         if not response or len(response) < 10:

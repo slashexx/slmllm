@@ -9,25 +9,32 @@ interface ModelBadgeProps {
 function ModelBadge({ modelType, confidence, fallbackUsed }: ModelBadgeProps) {
   const getModelInfo = () => {
     const type = modelType.toLowerCase()
-    if (type === 'llm' || type.includes('gemini') || type.includes('gpt')) {
+    if (type === 'gemini') {
+      return {
+        label: 'Gemini',
+        color: '#374151',
+        bgColor: '#f9fafb',
+        icon: '✨'
+      }
+    } else if (type === 'llm' || type.includes('gpt')) {
       return {
         label: 'LLM',
-        color: '#8b5cf6',
-        bgColor: 'rgba(139, 92, 246, 0.1)',
+        color: '#374151',
+        bgColor: '#f9fafb',
         icon: '🧠'
       }
     } else if (type === 'slm' || type.includes('llama')) {
       return {
         label: 'SLM',
-        color: '#10b981',
-        bgColor: 'rgba(16, 185, 129, 0.1)',
+        color: '#374151',
+        bgColor: '#f9fafb',
         icon: '⚡'
       }
     } else {
       return {
         label: 'Error',
         color: '#ef4444',
-        bgColor: 'rgba(239, 68, 68, 0.1)',
+        bgColor: '#f9fafb',
         icon: '❌'
       }
     }
@@ -58,8 +65,7 @@ function ModelBadge({ modelType, confidence, fallbackUsed }: ModelBadgeProps) {
           <div 
             className="confidence-fill"
             style={{
-              width: `${confidence * 100}%`,
-              backgroundColor: modelInfo.color
+              width: `${confidence * 100}%`
             }}
           />
         </div>

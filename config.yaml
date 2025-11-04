@@ -23,6 +23,8 @@ models:
 routing:
   complexity_threshold: 0.6
   max_slm_tokens: 500
+  large_input_threshold: 2000
+  gemini_preferred_threshold: 1000
   fallback_enabled: true
   cost_weight: 0.3
   latency_weight: 0.3

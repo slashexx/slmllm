@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import ChatInterface from './components/ChatInterface'
+import DistillInterface from './components/DistillInterface'
 import Header from './components/Header'
 import StatsPanel from './components/StatsPanel'
+import Tabs from './components/Tabs'
 import './App.css'
 
 interface Message {
@@ -22,6 +24,7 @@ interface Message {
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState<'router' | 'distill'>('router')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [stats, setStats] = useState({
@@ -70,10 +73,13 @@ function App() {
 
       setMessages(prev => [...prev, newMessage])
       
+      const isLLM = data.model_used === 'llm' || data.model_used === 'gemini'
+      const isSLM = data.model_used === 'slm'
+      
       setStats(prev => ({
         totalQueries: prev.totalQueries + 1,
-        llmCount: prev.llmCount + (data.model_used === 'llm' ? 1 : 0),
-        slmCount: prev.slmCount + (data.model_used === 'slm' ? 1 : 0),
+        llmCount: prev.llmCount + (isLLM ? 1 : 0),
+        slmCount: prev.slmCount + (isSLM ? 1 : 0),
         totalCost: prev.totalCost + data.decision.estimated_cost,
         avgLatency: (prev.avgLatency * prev.totalQueries + data.decision.estimated_latency) / (prev.totalQueries + 1)
       }))
@@ -104,12 +110,17 @@ function App() {
     <div className="app">
       <div className="app-container">
         <Header />
+        <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="main-content">
-          <ChatInterface 
-            messages={messages}
-            onSend={handleSend}
-            isLoading={isLoading}
-          />
+          {activeTab === 'router' ? (
+            <ChatInterface 
+              messages={messages}
+              onSend={handleSend}
+              isLoading={isLoading}
+            />
+          ) : (
+            <DistillInterface />
+          )}
           <StatsPanel stats={stats} />
         </div>
       </div>

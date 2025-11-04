@@ -32,6 +32,19 @@ class QueryResponse(BaseModel):
     fallback_reason: Optional[str] = None
 
 
+class DistillRequest(BaseModel):
+    prompt: str
+
+
+class DistillResponse(BaseModel):
+    response: str
+    model_used: str
+    refined_prompt: str
+    original_prompt: str
+    distillation_used: bool
+    distillation_error: Optional[str] = None
+
+
 @app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest):
     try:
@@ -70,12 +83,34 @@ async def health():
     return {"status": "healthy"}
 
 
+@app.post("/distill", response_model=DistillResponse)
+async def distill(request: DistillRequest):
+    try:
+        result = orchestrator.distill_and_process(request.prompt)
+        return DistillResponse(
+            response=result["response"],
+            model_used=result["model_used"],
+            refined_prompt=result["refined_prompt"],
+            original_prompt=result["original_prompt"],
+            distillation_used=result["distillation_used"],
+            distillation_error=result.get("distillation_error")
+        )
+    except Exception as e:
+        import traceback
+        error_detail = str(e)
+        traceback_str = traceback.format_exc()
+        print(f"Error processing distillation: {error_detail}")
+        print(f"Traceback: {traceback_str}")
+        raise HTTPException(status_code=500, detail=error_detail)
+
+
 @app.get("/")
 async def root():
     return {
         "message": "LLM-SLM Router API",
         "endpoints": {
             "/query": "POST - Process a query with intelligent routing",
+            "/distill": "POST - Distill prompt with SLM then process with LLM",
             "/health": "GET - Health check"
         }
     }

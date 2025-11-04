@@ -1,10 +1,9 @@
 .header {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 20px 30px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  background: white;
+  border-radius: 12px;
+  padding: 20px 24px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .header-content {
@@ -15,68 +14,46 @@
 
 .header-left {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 16px;
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .logo-icon {
-  font-size: 32px;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.1);
-  }
+  font-size: 24px;
 }
 
 .logo h1 {
-  font-size: 28px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: -0.5px;
 }
 
 .tagline {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-left: 44px;
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 400;
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
+  gap: 6px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .status-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   background: #10b981;
   border-radius: 50%;
-  animation: blink 2s ease-in-out infinite;
-  box-shadow: 0 0 10px #10b981;
-}
-
-@keyframes blink {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
 }
 

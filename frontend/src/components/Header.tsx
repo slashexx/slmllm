@@ -6,7 +6,6 @@ function Header() {
       <div className="header-content">
         <div className="header-left">
           <div className="logo">
-            <div className="logo-icon">⚡</div>
             <h1>LLM-SLM Router</h1>
           </div>
           <p className="tagline">Intelligent Model Selection</p>

@@ -4,9 +4,10 @@ import './InputArea.css'
 interface InputAreaProps {
   onSend: (prompt: string, priority?: string) => void
   isLoading: boolean
+  showPriority?: boolean
 }
 
-function InputArea({ onSend, isLoading }: InputAreaProps) {
+function InputArea({ onSend, isLoading, showPriority = true }: InputAreaProps) {
   const [prompt, setPrompt] = useState('')
   const [priority, setPriority] = useState('balanced')
 
@@ -26,32 +27,34 @@ function InputArea({ onSend, isLoading }: InputAreaProps) {
 
   return (
     <div className="input-area">
-      <div className="priority-selector">
-        <label>Priority:</label>
-        <div className="priority-buttons">
-          <button
-            className={priority === 'cost' ? 'active' : ''}
-            onClick={() => setPriority('cost')}
-            disabled={isLoading}
-          >
-            💰 Cost
-          </button>
-          <button
-            className={priority === 'balanced' ? 'active' : ''}
-            onClick={() => setPriority('balanced')}
-            disabled={isLoading}
-          >
-            ⚖️ Balanced
-          </button>
-          <button
-            className={priority === 'speed' ? 'active' : ''}
-            onClick={() => setPriority('speed')}
-            disabled={isLoading}
-          >
-            ⚡ Speed
-          </button>
+      {showPriority && (
+        <div className="priority-selector">
+          <label>Priority:</label>
+          <div className="priority-buttons">
+            <button
+              className={priority === 'cost' ? 'active' : ''}
+              onClick={() => setPriority('cost')}
+              disabled={isLoading}
+            >
+              💰 Cost
+            </button>
+            <button
+              className={priority === 'balanced' ? 'active' : ''}
+              onClick={() => setPriority('balanced')}
+              disabled={isLoading}
+            >
+              ⚖️ Balanced
+            </button>
+            <button
+              className={priority === 'speed' ? 'active' : ''}
+              onClick={() => setPriority('speed')}
+              disabled={isLoading}
+            >
+              ⚡ Speed
+            </button>
+          </div>
         </div>
-      </div>
+      )}
       <div className="input-container">
         <textarea
           value={prompt}
