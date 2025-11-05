@@ -572,3 +572,84 @@ MIT License - feel free to use and modify as needed.
 
 Contributions welcome! This is a learning project focused on LLM/SLM orchestration and routing.
 
+
+
+
+
+
+┌─────────────────────────────────────────────────────────────┐
+│ 1. User Interface (Frontend)                                │
+├─────────────────────────────────────────────────────────────┤
+│ • User selects model (e.g., "llama-2-7b")                  │
+│ • User uploads CSV file with training data                 │
+│ • Click "Start LoRA Training" button                       │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 2. Backend API (Python/FastAPI)                            │
+├─────────────────────────────────────────────────────────────┤
+│ POST /api/train                                            │
+│ • Receives model + CSV file                                │
+│ • Generates unique job_id (UUID)                           │
+│ • Saves CSV to /tmp/{job_id}_{filename}.csv               │
+│ • Stores job metadata in memory                            │
+│ • Generates Colab URL with parameters                      │
+│ • Returns: {job_id, colab_url}                            │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 3. User Opens Colab                                        │
+├─────────────────────────────────────────────────────────────┤
+│ • Clicks Colab link from UI                                │
+│ • Notebook opens with job_id in URL                        │
+│ • User can edit JOB_ID/MODEL manually if needed            │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Notebook Configuration (Cells 1-4)                      │
+├─────────────────────────────────────────────────────────────┤
+│ Cell 1: Install packages (transformers, peft, etc.)       │
+│ Cell 2: Configuration instructions                         │
+│ Cell 3: Manual parameter override (optional)               │
+│ Cell 4: Parse configuration                                │
+│         - Reads JOB_ID and MODEL_NAME                      │
+│         - Sets API_URL                                     │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 5. Dataset Download (Cell 6) ★ NEW ★                       │
+├─────────────────────────────────────────────────────────────┤
+│ GET /api/train/dataset/{job_id}                            │
+│ • Downloads user's CSV from backend                        │
+│ • Validates columns (input, output)                        │
+│ • Loads into pandas DataFrame                              │
+│ • Fallback to sample data if download fails                │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 6. Model Training (Cells 7-12)                             │
+├─────────────────────────────────────────────────────────────┤
+│ • Load model from HuggingFace                              │
+│   - Uses model mapping (e.g., meta-llama/Llama-2-7b-hf)   │
+│   - Applies 4-bit quantization                             │
+│ • Configure LoRA (rank=16, alpha=32)                       │
+│ • Prepare dataset                                          │
+│ • Train with SFTTrainer                                    │
+│ • Send progress updates to backend                         │
+│   POST /api/train/update/{job_id}                          │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 7. Save & Test (Cells 13-15)                               │
+├─────────────────────────────────────────────────────────────┤
+│ • Save LoRA adapter to ./lora_model_{job_id}               │
+│ • Test trained model                                       │
+│ • Mark job as completed (100%)                             │
+│ • User can download adapter files                          │
+└─────────────────────────────────────────────────────────────┘

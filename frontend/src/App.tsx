@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ChatInterface from './components/ChatInterface'
 import DistillInterface from './components/DistillInterface'
+import LoraTrainingInterface from './components/LoraTrainingInterface'
 import Header from './components/Header'
 import StatsPanel from './components/StatsPanel'
 import Tabs from './components/Tabs'
@@ -24,7 +25,7 @@ interface Message {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'router' | 'distill'>('router')
+  const [activeTab, setActiveTab] = useState<'router' | 'distill' | 'lora-training'>('router')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [stats, setStats] = useState({
@@ -120,8 +121,10 @@ function App() {
               onSend={handleSend}
               isLoading={isLoading}
             />
-          ) : (
+          ) : activeTab === 'distill' ? (
             <DistillInterface />
+          ) : (
+            <LoraTrainingInterface />
           )}
           <StatsPanel stats={stats} />
         </div>
