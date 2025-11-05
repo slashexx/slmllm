@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useRef, useEffect } from 'react'
 import MessageBubble from './MessageBubble'
 import InputArea from './InputArea'
 import './ChatInterface.css'
