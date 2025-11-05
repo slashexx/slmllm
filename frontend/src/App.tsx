@@ -35,6 +35,8 @@ function App() {
     avgLatency: 0
   })
 
+  const API_URL = import.meta.env.VITE_API_URL || 'https://slmllm.vercel.app'
+
   const handleSend = async (prompt: string, priority: string = 'balanced') => {
     if (!prompt.trim() || isLoading) return
 
@@ -42,7 +44,7 @@ function App() {
     const messageId = Date.now().toString()
 
     try {
-      const response = await fetch('/api/query', {
+      const response = await fetch(`${API_URL}/api/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
