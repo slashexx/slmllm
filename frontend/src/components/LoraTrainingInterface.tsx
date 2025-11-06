@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './LoraTrainingInterface.css'
 
 interface TrainingJob {
@@ -17,6 +17,10 @@ function LoraTrainingInterface() {
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [trainingJobs, setTrainingJobs] = useState<TrainingJob[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [useStarCoder, setUseStarCoder] = useState(false)
+  const [starCoderLanguage, setStarCoderLanguage] = useState('python')
+  const [starCoderMaxSamples, setStarCoderMaxSamples] = useState(10000)
+  const [availableLanguages, setAvailableLanguages] = useState<string[]>([])
 
   const availableModels = [
     { value: 'llama-2-7b', label: 'Llama 2 7B' },
@@ -26,6 +30,25 @@ function LoraTrainingInterface() {
     { value: 'gemma-7b', label: 'Gemma 7B' },
     { value: 'tinyllama-1.1b', label: 'TinyLlama 1.1B' },
   ]
+
+  useEffect(() => {
+    // Fetch available StarCoder languages
+    const fetchLanguages = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'https://slmllm-backend.vercel.app'
+        const response = await fetch(`${API_URL}/api/train/starcoder/languages`)
+        if (response.ok) {
+          const data = await response.json()
+          setAvailableLanguages(data.languages || [])
+        }
+      } catch (error) {
+        console.error('Error fetching languages:', error)
+        // Fallback to common languages
+        setAvailableLanguages(['python', 'javascript', 'java', 'cpp', 'c', 'go', 'rust', 'typescript'])
+      }
+    }
+    fetchLanguages()
+  }, [])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -41,8 +64,18 @@ function LoraTrainingInterface() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!selectedModel || !csvFile) {
-      alert('Please select a model and upload a CSV file')
+    if (!selectedModel) {
+      alert('Please select a model')
+      return
+    }
+
+    if (!useStarCoder && !csvFile) {
+      alert('Please either upload a CSV file or use StarCoder dataset')
+      return
+    }
+
+    if (useStarCoder && !starCoderLanguage) {
+      alert('Please select a programming language for StarCoder dataset')
       return
     }
 
@@ -51,7 +84,14 @@ function LoraTrainingInterface() {
     try {
       const formData = new FormData()
       formData.append('model', selectedModel)
-      formData.append('dataset', csvFile)
+      formData.append('use_starcoder', useStarCoder.toString())
+      
+      if (useStarCoder) {
+        formData.append('starcoder_language', starCoderLanguage)
+        formData.append('starcoder_max_samples', starCoderMaxSamples.toString())
+      } else if (csvFile) {
+        formData.append('dataset', csvFile)
+      }
 
       const API_URL = import.meta.env.VITE_API_URL || 'https://slmllm-backend.vercel.app'
       const response = await fetch(`${API_URL}/api/train`, {
@@ -60,7 +100,8 @@ function LoraTrainingInterface() {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorData = await response.json().catch(() => ({ detail: `HTTP error! status: ${response.status}` }))
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
@@ -79,6 +120,9 @@ function LoraTrainingInterface() {
       // Reset form
       setSelectedModel('')
       setCsvFile(null)
+      setUseStarCoder(false)
+      setStarCoderLanguage('python')
+      setStarCoderMaxSamples(10000)
       
       // Poll for status updates
       if (data.job_id) {
@@ -161,35 +205,93 @@ function LoraTrainingInterface() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="csv-upload">Upload Training Dataset (CSV)</label>
-            <div className="file-upload-wrapper">
+            <label>
               <input
-                id="csv-upload"
-                type="file"
-                accept=".csv"
-                onChange={handleFileChange}
-                className="file-input"
+                type="checkbox"
+                checked={useStarCoder}
+                onChange={(e) => setUseStarCoder(e.target.checked)}
                 disabled={isSubmitting}
+                style={{ marginRight: '8px' }}
               />
-              {csvFile && (
-                <div className="file-info">
-                  <span className="file-icon">📄</span>
-                  <span className="file-name">{csvFile.name}</span>
-                  <span className="file-size">
-                    ({(csvFile.size / 1024).toFixed(2)} KB)
-                  </span>
-                </div>
-              )}
-            </div>
-            <p className="helper-text">
-              CSV format: columns should include 'input' and 'output' for instruction-response pairs
+              Use StarCoder Dataset (from Hugging Face)
+            </label>
+            <p className="helper-text" style={{ marginLeft: '24px', marginTop: '4px', fontSize: '0.85em', color: '#666' }}>
+              Loads 783GB of code data directly in Google Colab - no download needed!
             </p>
           </div>
+
+          {useStarCoder ? (
+            <>
+              <div className="form-group">
+                <label htmlFor="starcoder-language">Programming Language</label>
+                <select
+                  id="starcoder-language"
+                  value={starCoderLanguage}
+                  onChange={(e) => setStarCoderLanguage(e.target.value)}
+                  className="model-select"
+                  disabled={isSubmitting}
+                >
+                  {availableLanguages.map((lang) => (
+                    <option key={lang} value={lang}>
+                      {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <p className="helper-text">
+                  Select the programming language to train on from StarCoder dataset
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="starcoder-samples">Max Samples</label>
+                <input
+                  id="starcoder-samples"
+                  type="number"
+                  min="1000"
+                  max="1000000"
+                  step="1000"
+                  value={starCoderMaxSamples}
+                  onChange={(e) => setStarCoderMaxSamples(parseInt(e.target.value) || 10000)}
+                  className="model-select"
+                  disabled={isSubmitting}
+                />
+                <p className="helper-text">
+                  Maximum number of code samples to use (default: 10,000). More samples = longer training time.
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="form-group">
+              <label htmlFor="csv-upload">Upload Training Dataset (CSV)</label>
+              <div className="file-upload-wrapper">
+                <input
+                  id="csv-upload"
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileChange}
+                  className="file-input"
+                  disabled={isSubmitting}
+                />
+                {csvFile && (
+                  <div className="file-info">
+                    <span className="file-icon">📄</span>
+                    <span className="file-name">{csvFile.name}</span>
+                    <span className="file-size">
+                      ({(csvFile.size / 1024).toFixed(2)} KB)
+                    </span>
+                  </div>
+                )}
+              </div>
+              <p className="helper-text">
+                CSV format: columns should include 'input' and 'output' for instruction-response pairs
+              </p>
+            </div>
+          )}
 
           <button
             type="submit"
             className="submit-button"
-            disabled={!selectedModel || !csvFile || isSubmitting}
+            disabled={!selectedModel || (!useStarCoder && !csvFile) || isSubmitting}
           >
             {isSubmitting ? (
               <>
@@ -209,7 +311,8 @@ function LoraTrainingInterface() {
           <h3>ℹ️ How it works</h3>
           <ul>
             <li>Select a base model from our curated list</li>
-            <li>Upload your custom CSV dataset with input-output pairs</li>
+            <li>Choose StarCoder dataset (loads directly in Colab) or upload your custom CSV</li>
+            <li>StarCoder: 783GB of code data from Hugging Face - loads directly in Google Colab</li>
             <li>Training runs automatically on Google Colab's free GPU</li>
             <li>LoRA adapters are lightweight and train quickly</li>
             <li>Download your trained model when complete</li>

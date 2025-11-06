@@ -1,13 +1,17 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from orchestrator import HybridOrchestrator
 import uuid
 import json
 import os
+import pandas as pd
 from datetime import datetime
+import io
+from datasets import load_dataset
+import asyncio
 
 
 app = FastAPI(title="LLM-SLM Router API", version="1.0.0")
@@ -123,6 +127,9 @@ async def root():
             "/train/status/{job_id}": "GET - Get training job status",
             "/train/dataset/{job_id}": "GET - Download training dataset",
             "/train/update/{job_id}": "POST - Update training job status (from Colab)",
+            "/train/starcoder/languages": "GET - Get available StarCoder dataset languages",
+            "/train/starcoder/download": "POST - Download and convert StarCoder dataset to CSV",
+            "/train/starcoder/create": "POST - Create training job directly from StarCoder dataset",
             "/health": "GET - Health check"
         }
     }
@@ -131,47 +138,84 @@ async def root():
 @app.post("/train")
 async def train(
     model: str = Form(...),
-    dataset: UploadFile = File(...)
+    dataset: Optional[UploadFile] = File(None),
+    use_starcoder: Optional[bool] = Form(False),
+    starcoder_language: Optional[str] = Form(None),
+    starcoder_max_samples: Optional[int] = Form(10000)
 ):
     """
     Start a LoRA training job using Google Colab.
+    Supports both CSV upload and StarCoder dataset from Hugging Face.
     """
     try:
-        # Validate file type
-        if not dataset.filename.endswith('.csv'):
-            raise HTTPException(status_code=400, detail="Only CSV files are supported")
-        
-        # Read the dataset
-        contents = await dataset.read()
-        
-        # Generate unique job ID
         job_id = str(uuid.uuid4())
+        dataset_path = None
+        dataset_filename = None
         
-        # Store dataset temporarily (in production, use cloud storage)
-        dataset_path = f"/tmp/{job_id}_{dataset.filename}"
-        with open(dataset_path, "wb") as f:
-            f.write(contents)
+        # Check if using StarCoder dataset or CSV upload
+        if use_starcoder:
+            if not starcoder_language:
+                raise HTTPException(status_code=400, detail="StarCoder language is required when use_starcoder is true")
+            
+            # For StarCoder, we don't download - Colab will load it directly
+            dataset_filename = f"starcoder_{starcoder_language}_{starcoder_max_samples}.parquet"
+            
+            # Create training job record with StarCoder parameters
+            training_jobs[job_id] = {
+                "job_id": job_id,
+                "model": model,
+                "dataset_type": "starcoder",
+                "starcoder_language": starcoder_language,
+                "starcoder_max_samples": starcoder_max_samples,
+                "dataset_filename": dataset_filename,
+                "status": "pending",
+                "progress": 0,
+                "created_at": datetime.now().isoformat(),
+            }
+        else:
+            # Traditional CSV upload
+            if not dataset:
+                raise HTTPException(status_code=400, detail="Either upload a CSV file or use StarCoder dataset")
+            
+            if not dataset.filename.endswith('.csv'):
+                raise HTTPException(status_code=400, detail="Only CSV files are supported")
+            
+            # Read the dataset
+            contents = await dataset.read()
+            
+            # Store dataset temporarily (in production, use cloud storage)
+            dataset_path = f"/tmp/{job_id}_{dataset.filename}"
+            dataset_filename = dataset.filename
+            with open(dataset_path, "wb") as f:
+                f.write(contents)
+            
+            # Create training job record
+            training_jobs[job_id] = {
+                "job_id": job_id,
+                "model": model,
+                "dataset_type": "csv",
+                "dataset_filename": dataset_filename,
+                "dataset_path": dataset_path,
+                "status": "pending",
+                "progress": 0,
+                "created_at": datetime.now().isoformat(),
+            }
         
         # Generate Colab notebook URL with parameters
-        # This will be a template that the user can run
-        colab_url = f"https://colab.research.google.com/github/slashexx/lora-fine-pipe/blob/main/lora_training.ipynb?job_id={job_id}&model={model}"
+        # Pass all parameters via URL
+        params = f"job_id={job_id}&model={model}"
+        if use_starcoder:
+            params += f"&use_starcoder=true&starcoder_language={starcoder_language}&starcoder_max_samples={starcoder_max_samples}"
         
-        # Create training job record
-        training_jobs[job_id] = {
-            "job_id": job_id,
-            "model": model,
-            "dataset_filename": dataset.filename,
-            "dataset_path": dataset_path,
-            "status": "pending",
-            "progress": 0,
-            "created_at": datetime.now().isoformat(),
-            "colab_url": colab_url
-        }
+        colab_url = f"https://colab.research.google.com/github/slashexx/lora-fine-pipe/blob/main/lora_training.ipynb?{params}"
+        
+        training_jobs[job_id]["colab_url"] = colab_url
         
         return {
             "job_id": job_id,
             "colab_url": colab_url,
-            "message": "Training job created. Click the Colab link to start training on Google's GPUs."
+            "message": "Training job created. Click the Colab link to start training on Google's GPUs.",
+            "dataset_type": "starcoder" if use_starcoder else "csv"
         }
         
     except Exception as e:
@@ -198,11 +242,20 @@ async def get_training_status(job_id: str):
 async def get_training_dataset(job_id: str):
     """
     Download the dataset file for a training job.
+    Only works for CSV uploads, not StarCoder (which loads directly in Colab).
     """
     if job_id not in training_jobs:
         raise HTTPException(status_code=404, detail="Training job not found")
     
-    dataset_path = training_jobs[job_id].get("dataset_path")
+    job = training_jobs[job_id]
+    
+    if job.get("dataset_type") == "starcoder":
+        raise HTTPException(
+            status_code=400, 
+            detail="StarCoder dataset is loaded directly in Colab from Hugging Face. No download needed."
+        )
+    
+    dataset_path = job.get("dataset_path")
     
     if not dataset_path or not os.path.exists(dataset_path):
         raise HTTPException(status_code=404, detail="Dataset file not found")
@@ -210,8 +263,28 @@ async def get_training_dataset(job_id: str):
     return FileResponse(
         path=dataset_path,
         media_type="text/csv",
-        filename=training_jobs[job_id].get("dataset_filename", "dataset.csv")
+        filename=job.get("dataset_filename", "dataset.csv")
     )
+
+
+@app.get("/train/starcoder/languages")
+async def get_starcoder_languages():
+    """
+    Get list of available programming languages in StarCoder dataset.
+    """
+    # Common programming languages available in StarCoder dataset
+    languages = [
+        "python", "javascript", "java", "cpp", "c", "go", "rust", "typescript",
+        "php", "ruby", "swift", "kotlin", "scala", "r", "matlab", "shell",
+        "powershell", "perl", "lua", "dart", "haskell", "ocaml", "clojure",
+        "erlang", "elixir", "fsharp", "vb", "csharp", "html", "css", "sql",
+        "json", "yaml", "xml", "markdown", "dockerfile", "makefile", "cmake"
+    ]
+    
+    return {
+        "languages": sorted(languages),
+        "message": "Available programming languages in StarCoder dataset. Use 'python' for Python code."
+    }
 
 
 @app.post("/train/update/{job_id}")
