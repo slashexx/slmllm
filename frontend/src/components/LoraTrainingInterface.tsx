@@ -35,7 +35,8 @@ function LoraTrainingInterface() {
     // Fetch available StarCoder languages
     const fetchLanguages = async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'https://slmllm-backend.vercel.app'
+        // Use proxy for local dev, or VITE_API_URL if set, or fallback to production
+        const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'https://slmllm-backend.vercel.app')
         const response = await fetch(`${API_URL}/api/train/starcoder/languages`)
         if (response.ok) {
           const data = await response.json()
@@ -93,7 +94,8 @@ function LoraTrainingInterface() {
         formData.append('dataset', csvFile)
       }
 
-      const API_URL = import.meta.env.VITE_API_URL || 'https://slmllm-backend.vercel.app'
+      // Use proxy for local dev, or VITE_API_URL if set, or fallback to production
+      const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'https://slmllm-backend.vercel.app')
       const response = await fetch(`${API_URL}/api/train`, {
         method: 'POST',
         body: formData,
@@ -117,6 +119,11 @@ function LoraTrainingInterface() {
 
       setTrainingJobs(prev => [newJob, ...prev])
       
+      // Show instructions alert
+      if (data.instructions && Array.isArray(data.instructions)) {
+        alert(`🚀 Training Job Created!\n\n${data.instructions.join('\n')}\n\nClick the Colab link to open the notebook!`)
+      }
+      
       // Reset form
       setSelectedModel('')
       setCsvFile(null)
@@ -137,7 +144,8 @@ function LoraTrainingInterface() {
   }
 
   const pollJobStatus = async (jobId: string) => {
-    const API_URL = import.meta.env.VITE_API_URL || 'https://slmllm-backend.vercel.app'
+    // Use proxy for local dev, or VITE_API_URL if set, or fallback to production
+    const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'https://slmllm-backend.vercel.app')
     
     const interval = setInterval(async () => {
       try {

@@ -12,6 +12,7 @@ from datetime import datetime
 import io
 from datasets import load_dataset
 import asyncio
+import base64
 
 
 app = FastAPI(title="LLM-SLM Router API", version="1.0.0")
@@ -183,19 +184,32 @@ async def train(
             # Read the dataset
             contents = await dataset.read()
             
-            # Store dataset temporarily (in production, use cloud storage)
-            dataset_path = f"/tmp/{job_id}_{dataset.filename}"
-            dataset_filename = dataset.filename
-            with open(dataset_path, "wb") as f:
-                f.write(contents)
+            # Validate file size (max 50MB for base64 storage)
+            if len(contents) > 50 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Dataset file too large. Maximum size is 50MB. Please use StarCoder dataset for larger datasets.")
             
-            # Create training job record
+            # Store dataset content as base64 in job record (so it persists in serverless)
+            dataset_content_b64 = base64.b64encode(contents).decode('utf-8')
+            dataset_filename = dataset.filename
+            
+            # Also try to save to /tmp as fallback (for local dev)
+            dataset_path = f"/tmp/{job_id}_{dataset.filename}"
+            try:
+                os.makedirs("/tmp", exist_ok=True)
+                with open(dataset_path, "wb") as f:
+                    f.write(contents)
+            except Exception as e:
+                print(f"Warning: Could not save to /tmp: {e}")
+                dataset_path = None
+            
+            # Create training job record with dataset content stored
             training_jobs[job_id] = {
                 "job_id": job_id,
                 "model": model,
                 "dataset_type": "csv",
                 "dataset_filename": dataset_filename,
-                "dataset_path": dataset_path,
+                "dataset_content_b64": dataset_content_b64,  # Store actual content
+                "dataset_path": dataset_path,  # Fallback for local dev
                 "status": "pending",
                 "progress": 0,
                 "created_at": datetime.now().isoformat(),
@@ -214,7 +228,14 @@ async def train(
         return {
             "job_id": job_id,
             "colab_url": colab_url,
-            "message": "Training job created. Click the Colab link to start training on Google's GPUs.",
+            "message": "Training job created! Click the Colab link below. When the notebook opens, click 'Runtime > Run all' in the menu to start training automatically.",
+            "instructions": [
+                "1. Click the Colab link below to open the notebook",
+                "2. When the notebook opens, click 'Runtime' > 'Run all' from the top menu",
+                "3. The notebook will automatically install packages, load your dataset, and start training",
+                "4. Training progress will be tracked in real-time",
+                "5. Your trained model will be saved when complete"
+            ],
             "dataset_type": "starcoder" if use_starcoder else "csv"
         }
         
@@ -255,16 +276,29 @@ async def get_training_dataset(job_id: str):
             detail="StarCoder dataset is loaded directly in Colab from Hugging Face. No download needed."
         )
     
+    # Try to get dataset from base64 content first (most reliable)
+    dataset_content_b64 = job.get("dataset_content_b64")
+    if dataset_content_b64:
+        try:
+            dataset_content = base64.b64decode(dataset_content_b64)
+            return Response(
+                content=dataset_content,
+                media_type="text/csv",
+                headers={"Content-Disposition": f'attachment; filename="{job.get("dataset_filename", "dataset.csv")}"'}
+            )
+        except Exception as e:
+            print(f"Error decoding base64 dataset: {e}")
+    
+    # Fallback to file path (for local dev)
     dataset_path = job.get("dataset_path")
+    if dataset_path and os.path.exists(dataset_path):
+        return FileResponse(
+            path=dataset_path,
+            media_type="text/csv",
+            filename=job.get("dataset_filename", "dataset.csv")
+        )
     
-    if not dataset_path or not os.path.exists(dataset_path):
-        raise HTTPException(status_code=404, detail="Dataset file not found")
-    
-    return FileResponse(
-        path=dataset_path,
-        media_type="text/csv",
-        filename=job.get("dataset_filename", "dataset.csv")
-    )
+    raise HTTPException(status_code=404, detail="Dataset file not found")
 
 
 @app.get("/train/starcoder/languages")
